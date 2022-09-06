@@ -16,6 +16,7 @@ const SHA256 = require("crypto-js/sha256");
 const BlockClass = require("./block.js");
 const bitcoinMessage = require("bitcoinjs-message");
 const GENESIS_BLOCK_FLAG = "Genesis Block";
+const LIMIT_TIME_IN_SECONDS = 5 * 60;
 
 class Blockchain {
   /**
@@ -79,13 +80,14 @@ class Blockchain {
         block.hash = SHA256(JSON.stringify(block)).toString();
 
         const shouldBlockBeAdded = await block.validate();
-        if (shouldBlockBeAdded) {
+        const chainErrorsArray = await self.validateChain();
+        if (shouldBlockBeAdded && chainErrorsArray.length === 0) {
           // updates the blockchain data
           self.height = newHeight;
           self.chain.push(block);
           resolve(block);
         } else {
-          reject("New block is not valid");
+          reject("New block or chain is not valid");
         }
       } catch (error) {
         reject(error);
@@ -141,7 +143,7 @@ class Blockchain {
         const currentTime = parseInt(
           new Date().getTime().toString().slice(0, -3)
         );
-        if (currentTime - messageTime > 5) {
+        if (currentTime - messageTime < LIMIT_TIME_IN_SECONDS) {
           const isValid = bitcoinMessage.verify(message, address, signature);
           if (isValid) {
             const newBlock = new BlockClass.Block({
@@ -175,10 +177,12 @@ class Blockchain {
   getBlockByHash(hash) {
     let self = this;
     return new Promise((resolve, reject) => {
-      const selectedBlock = self.chain.filter((block) => {
-        block.hash === hash;
-      });
-      return selectedBlock.length > 0 ? selectedBlock[0] : null;
+      try {
+        const selectedBlock = self.chain.find((block) => block.hash === hash);
+        resolve(selectedBlock);
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
@@ -238,17 +242,15 @@ class Blockchain {
                 if (
                   block.previousBlockHash !== self.chain[previousindex].hash
                 ) {
-                  reject("Blockchain is not valid");
-                }
-                if (self.chain.length - 1 === i) {
-                  resolve("Chain is valid!", errorLog);
+                    errorLog.push("Blockchain is not valid");
                 }
               }
             } else {
-              reject("Block is not vali!!!d");
+                errorLog.push("Block is not vali!!!d");
             }
           });
         });
+        resolve(errorLog)
       } catch (error) {
         console.log(`error : ${error}`);
         reject(errorLog);
