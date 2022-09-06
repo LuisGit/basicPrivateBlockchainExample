@@ -15,12 +15,18 @@ class BlockchainController {
     this.submitStar();
     this.getBlockByHash();
     this.getStarsByOwner();
-    this.testPoint();
+    this.validateChain();
   }
 
-  testPoint() {
-    this.app.get("/test", async (req, res) => {
-      return res.status(200).json("Test is correct!");
+  validateChain() {
+    this.app.get("/validateChain", async (req, res) => {
+      try {
+        const message = await this.blockchain.validateChain();
+        return res.status(200).json(message);
+      } catch (error) {
+        console.log("err -> ", error);
+        return res.status(404).json(error);
+      }
     });
   }
 

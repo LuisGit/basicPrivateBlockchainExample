@@ -41,10 +41,12 @@ class Block {
       try {
         // Save in auxiliary variable the current block hash
         const blockHash = self.hash;
+        const blockCopy = {...self}
+        blockCopy.hash = null
 
         // Recalculate the hash of the Block
-        const realBlockHash = SHA256(JSON.stringify(self)).toString();
-
+        const realBlockHash = SHA256(JSON.stringify(blockCopy)).toString();
+        
         // Comparing if the hashes changed
         // Returning the Block is not valid
         resolve(blockHash === realBlockHash);

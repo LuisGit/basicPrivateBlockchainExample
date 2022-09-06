@@ -69,20 +69,24 @@ class Blockchain {
     let self = this;
     return new Promise(async (resolve, reject) => {
       try {
-        // updates the blockchain data
         const newHeight = self.height + 1;
-        self.height = newHeight;
-
-        // sets the block data
-        if (self.height > 0) {
-          // checks this block is not the genesis block
+        // checks this block is not the genesis block
+        if (self.height >= 0) {
           block.previousBlockHash = self.chain[self.chain.length - 1].hash;
         }
         block.height = newHeight;
         block.time = new Date().getTime().toString().slice(0, -3);
         block.hash = SHA256(JSON.stringify(block)).toString();
-        self.chain.push(block);
-        resolve(block);
+
+        const shouldBlockBeAdded = await block.validate();
+        if (shouldBlockBeAdded) {
+          // updates the blockchain data
+          self.height = newHeight;
+          self.chain.push(block);
+          resolve(block);
+        } else {
+          reject("New block is not valid");
+        }
       } catch (error) {
         reject(error);
       }
@@ -132,26 +136,32 @@ class Blockchain {
   submitStar(address, message, signature, star) {
     let self = this;
     return new Promise(async (resolve, reject) => {
-      const messageTime = parseInt(message.split(":")[1]);
-      const currentTime = parseInt(
-        new Date().getTime().toString().slice(0, -3)
-      );
-      if (currentTime - messageTime > 5) {
-        const isValid = bitcoinMessage.verify(message, address, signature);
-        if (isValid) {
-          const newBlock = new BlockClass.Block({
-            address,
-            message,
-            signature,
-            star,
-          });
-          self._addBlock(newBlock);
-          resolve(newBlock);
+      try {
+        const messageTime = parseInt(message.split(":")[1]);
+        const currentTime = parseInt(
+          new Date().getTime().toString().slice(0, -3)
+        );
+        if (currentTime - messageTime > 5) {
+          const isValid = bitcoinMessage.verify(message, address, signature);
+          if (isValid) {
+            const newBlock = new BlockClass.Block({
+              address,
+              message,
+              signature,
+              star,
+            });
+            self._addBlock(newBlock);
+            resolve(newBlock);
+          } else {
+            reject(
+              "Not a valid transaction,please review your signature, message and address"
+            );
+          }
         } else {
-          reject("Not a valid transaction,please review your signature, message and address");
+          reject("Time can't be greater than 5 minutes");
         }
-      } else {
-        reject("Time can't be greater than 5 minutes");
+      } catch (error) {
+        console.log("this is the error:", error);
       }
     });
   }
@@ -216,20 +226,32 @@ class Blockchain {
   validateChain() {
     let self = this;
     let errorLog = [];
+
     return new Promise(async (resolve, reject) => {
       try {
-        let previousHash = "";
-        self.chain.forEach((block) => {
-          if (block.data !== GENESIS_BLOCK_FLAG) {
-            if (block.previousHash !== previousHash) {
-              reject("Chain is not valid");
+        self.chain.forEach((block, i) => {
+          block.validate().then((value) => {
+            if (value) {
+              if (block.height !== 0) {
+                const previousindex = block.height - 1;
+                // lets skip the genesis block
+                if (
+                  block.previousBlockHash !== self.chain[previousindex].hash
+                ) {
+                  reject("Blockchain is not valid");
+                }
+                if (self.chain.length - 1 === i) {
+                  resolve("Chain is valid!", errorLog);
+                }
+              }
+            } else {
+              reject("Block is not vali!!!d");
             }
-          }
-          errorLog.push(block.validate());
-          previousHash = block.hash;
+          });
         });
       } catch (error) {
-        reject(error);
+        console.log(`error : ${error}`);
+        reject(errorLog);
       }
     });
   }
